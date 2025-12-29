@@ -1,54 +1,154 @@
 # ChatList
 
-Minimal PyQt application example.
+AI Model Comparison Tool - отправляйте один промт в несколько нейросетей и сравнивайте их ответы.
 
-## Installation
+## Описание
 
-1. Create a virtual environment:
+ChatList — это Python-приложение с графическим интерфейсом (PyQt5), которое позволяет:
+- Отправлять один промт в несколько AI-моделей одновременно
+- Сравнивать ответы разных моделей в удобной таблице
+- Сохранять интересные результаты в базу данных
+- Экспортировать результаты в Markdown или JSON
+- Управлять списком моделей и промтов
+
+## Установка
+
+1. Клонируйте репозиторий или скачайте файлы проекта
+
+2. Создайте виртуальное окружение:
 ```bash
 python3 -m venv venv
 ```
 
-2. Activate the virtual environment:
+3. Активируйте виртуальное окружение:
 ```bash
-source venv/bin/activate
+source venv/bin/activate  # Linux/Mac
+# или
+venv\Scripts\activate  # Windows
 ```
 
-3. Install dependencies:
+4. Установите зависимости:
 ```bash
 pip install -r requirements.txt
 ```
 
-## Running
+5. Настройте API-ключи:
+   - Скопируйте `.env.example` в `.env`
+   - Откройте `.env` и добавьте ваши API-ключи:
+   ```
+   OPENROUTER_API_KEY=your_key_here
+   ```
 
-Activate the virtual environment (if not already activated) and run:
+6. Инициализируйте базу данных (опционально, добавит примерные модели):
+```bash
+python init_db.py
+```
+
+## Запуск
+
+Активируйте виртуальное окружение (если не активировано) и запустите:
 ```bash
 source venv/bin/activate
 python main.py
 ```
 
-## Building Executable
+## Использование
 
-To create a standalone executable file:
+### Добавление моделей
 
-1. Install PyInstaller (if not already installed):
+1. В меню выберите **Models → Add Model...**
+2. Заполните форму:
+   - **Name**: Название модели (например, `openai/gpt-4` для OpenRouter)
+   - **API URL**: URL API-эндпоинта (например, `https://openrouter.ai/api/v1/chat/completions`)
+   - **API ID**: Имя переменной окружения с API-ключом (например, `OPENROUTER_API_KEY`)
+   - **Active**: Отметьте, если модель активна
+
+### Отправка промта
+
+1. Введите промт в текстовое поле
+2. (Опционально) Добавьте теги через запятую
+3. Нажмите кнопку **Send**
+4. Дождитесь ответов от всех активных моделей
+5. Отметьте интересные результаты чекбоксами
+6. Нажмите **Save Selected** для сохранения в базу данных
+
+### Работа с сохраненными промтами
+
+- Выберите промт из выпадающего списка "Saved Prompts"
+- Нажмите **Load Prompt** для загрузки
+- Или просто выберите промт и нажмите **Send**
+
+### Экспорт результатов
+
+1. Отметьте нужные результаты чекбоксами
+2. Нажмите **Export**
+3. Выберите формат (Markdown или JSON) и сохраните файл
+
+## Поддерживаемые провайдеры
+
+- **OpenRouter** (рекомендуется) - единый API для множества моделей
+- **OpenAI** - прямой доступ к OpenAI API
+- **DeepSeek** - DeepSeek API
+- **Groq** - Groq API
+- Любые другие провайдеры с OpenAI-совместимым форматом
+
+## Структура проекта
+
+```
+ChatList/
+├── main.py          # Главный файл приложения (GUI)
+├── db.py            # Модуль работы с базой данных
+├── models.py        # Модуль управления моделями
+├── network.py       # Модуль API-запросов
+├── init_db.py       # Скрипт инициализации БД
+├── requirements.txt  # Зависимости проекта
+├── .env.example     # Пример файла с API-ключами
+├── DATABASE.md      # Описание схемы базы данных
+└── PLAN.md          # План реализации проекта
+```
+
+## База данных
+
+Приложение использует SQLite базу данных `chatlist.db` для хранения:
+- Промтов (prompts)
+- Конфигурации моделей (models)
+- Сохраненных результатов (results)
+- Настроек приложения (settings)
+
+Подробное описание схемы см. в `DATABASE.md`.
+
+## Сборка исполняемого файла
+
+Для создания standalone исполняемого файла:
+
+1. Установите PyInstaller (если не установлен):
 ```bash
 source venv/bin/activate
 pip install pyinstaller
 ```
 
-2. Build the executable:
+2. Соберите исполняемый файл:
 ```bash
 pyinstaller --onefile --windowed --name ChatList main.py
 ```
 
-The executable will be created in the `dist/` directory as `ChatList`.
+Исполняемый файл будет создан в директории `dist/` как `ChatList`.
 
-You can run it directly:
-```bash
-./dist/ChatList
-```
+## Требования
 
-## Description
+- Python 3.11+
+- SQLite3
+- PyQt5
+- requests или httpx
+- python-dotenv
 
-Simple PyQt5 application with a window containing a label and a button. Clicking the button changes the label text.
+## Лицензия
+
+См. файл LICENSE.
+
+## Поддержка
+
+При возникновении проблем проверьте:
+1. Правильность API-ключей в `.env`
+2. Наличие активных моделей в базе данных
+3. Логи в консоли для диагностики ошибок
