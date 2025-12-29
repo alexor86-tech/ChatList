@@ -9,6 +9,7 @@ import json
 import logging
 from typing import List, Dict, Optional, Any
 from datetime import datetime
+import markdown
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTextEdit, QPushButton, QTableWidget, QTableWidgetItem, QCheckBox,
@@ -460,6 +461,104 @@ class ManageModelsDialog(QDialog):
             QMessageBox.critical(self, "Ошибка", "Не удалось изменить статус модели")
 
 
+class MarkdownViewDialog(QDialog):
+    """
+    Dialog for viewing markdown-formatted text.
+    """
+    
+    def __init__(self, title: str, text: str, parent=None):
+        """
+        Initialize markdown view dialog.
+        
+        Args:
+            title [in]: Dialog title
+            text [in]: Text to display (will be rendered as markdown)
+            parent [in]: Parent widget
+        """
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setMinimumSize(800, 600)
+        
+        # Local variables
+        layout = QVBoxLayout()
+        
+        # Text editor for markdown display
+        self.text_edit = QTextEdit()
+        self.text_edit.setReadOnly(True)
+        
+        # Convert markdown to HTML and display
+        try:
+            html = markdown.markdown(
+                text,
+                extensions=['extra', 'codehilite', 'nl2br', 'sane_lists']
+            )
+            # Add basic CSS for better formatting
+            html = f"""
+            <style>
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                    font-size: 14px;
+                    line-height: 1.6;
+                    padding: 10px;
+                }}
+                pre {{
+                    background-color: #f4f4f4;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 10px;
+                    overflow-x: auto;
+                }}
+                code {{
+                    background-color: #f4f4f4;
+                    padding: 2px 4px;
+                    border-radius: 3px;
+                    font-family: 'Courier New', monospace;
+                }}
+                pre code {{
+                    background-color: transparent;
+                    padding: 0;
+                }}
+                h1, h2, h3, h4, h5, h6 {{
+                    margin-top: 1em;
+                    margin-bottom: 0.5em;
+                }}
+                blockquote {{
+                    border-left: 4px solid #ddd;
+                    margin-left: 0;
+                    padding-left: 1em;
+                    color: #666;
+                }}
+                table {{
+                    border-collapse: collapse;
+                    width: 100%;
+                }}
+                th, td {{
+                    border: 1px solid #ddd;
+                    padding: 8px;
+                    text-align: left;
+                }}
+                th {{
+                    background-color: #f2f2f2;
+                }}
+            </style>
+            {html}
+            """
+            self.text_edit.setHtml(html)
+        except Exception as e:
+            # Fallback to plain text if markdown conversion fails
+            logging.error(f"Error converting markdown: {e}")
+            self.text_edit.setPlainText(text)
+        
+        layout.addWidget(self.text_edit)
+        
+        # Close button
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(self.accept)
+        layout.addWidget(buttons)
+        
+        self.setLayout(layout)
+
+
 class ViewPromptsDialog(QDialog):
     """
     Dialog for viewing saved prompts.
@@ -802,14 +901,20 @@ class MainWindow(QMainWindow):
         # Top section: Prompt input
         prompt_section = self.create_prompt_section()
         main_layout.addWidget(prompt_section)
+        # Prompt section should not stretch
+        main_layout.setStretchFactor(prompt_section, 0)
         
         # Middle section: Results table
         results_section = self.create_results_section()
         main_layout.addWidget(results_section)
+        # Results section should stretch to fill available space
+        main_layout.setStretchFactor(results_section, 1)
         
         # Bottom section: Action buttons
         buttons_section = self.create_buttons_section()
         main_layout.addWidget(buttons_section)
+        # Buttons section should not stretch
+        main_layout.setStretchFactor(buttons_section, 0)
         
         # Status bar
         self.status_bar = QStatusBar()
@@ -934,16 +1039,28 @@ class MainWindow(QMainWindow):
         
         # Table
         self.results_table = QTableWidget()
-        self.results_table.setColumnCount(3)
-        self.results_table.setHorizontalHeaderLabels(["Выбрать", "Модель", "Ответ"])
-        self.results_table.horizontalHeader().setStretchLastSection(True)
+        self.results_table.setColumnCount(4)
+        self.results_table.setHorizontalHeaderLabels(["Выбрать", "Модель", "Ответ", "Действия"])
+        self.results_table.horizontalHeader().setStretchLastSection(False)
         self.results_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.results_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.results_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.results_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.results_table.setAlternatingRowColors(True)
         self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
+        # Enable word wrap for all cells
+        self.results_table.setWordWrap(True)
+        # Set vertical header to resize rows to content
+        self.results_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        # Set minimum height for results table to ensure buttons are visible
+        self.results_table.setMinimumHeight(400)
+        # Limit maximum row height to prevent extremely tall rows
+        # This ensures that long messages are scrollable within the cell
+        self.results_table.verticalHeader().setMaximumSectionSize(300)
         
         layout.addWidget(self.results_table)
+        # Set stretch factor for results section to take more vertical space
+        layout.setStretchFactor(self.results_table, 1)
         section.setLayout(layout)
         return section
     
@@ -1159,10 +1276,30 @@ class MainWindow(QMainWindow):
         model_item.setData(Qt.UserRole, len(self.temp_results) - 1)
         self.results_table.setItem(row, 1, model_item)
         
-        # Response text
+        # Response text (multiline)
         response_item = QTableWidgetItem(response)
         response_item.setFlags(response_item.flags() & ~Qt.ItemIsEditable)
+        # Enable word wrap for response text
+        response_item.setTextAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.results_table.setItem(row, 2, response_item)
+        
+        # Actions column - Open button
+        actions_widget = QWidget()
+        actions_layout = QHBoxLayout()
+        actions_layout.setContentsMargins(2, 2, 2, 2)
+        
+        open_btn = QPushButton("Открыть")
+        open_btn.setMaximumWidth(80)
+        open_btn.clicked.connect(lambda checked, r=response, m=model_name: self.open_markdown_view(m, r))
+        
+        actions_layout.addWidget(open_btn)
+        actions_layout.addStretch()
+        
+        actions_widget.setLayout(actions_layout)
+        self.results_table.setCellWidget(row, 3, actions_widget)
+        
+        # Resize row to fit content
+        self.results_table.resizeRowToContents(row)
         
         # Check if all requests finished
         if len(self.temp_results) >= len(models.get_active_models()):
@@ -1299,15 +1436,50 @@ class MainWindow(QMainWindow):
                 model_item.setData(Qt.UserRole, len(self.temp_results) - 1)
                 self.results_table.setItem(row, 1, model_item)
                 
-                # Response text
+                # Response text (multiline)
                 response_item = QTableWidgetItem(response_text)
                 response_item.setFlags(response_item.flags() & ~Qt.ItemIsEditable)
+                # Enable word wrap for response text
+                response_item.setTextAlignment(Qt.AlignTop | Qt.AlignLeft)
                 self.results_table.setItem(row, 2, response_item)
+                
+                # Actions column - Open button
+                actions_widget = QWidget()
+                actions_layout = QHBoxLayout()
+                actions_layout.setContentsMargins(2, 2, 2, 2)
+                
+                open_btn = QPushButton("Открыть")
+                open_btn.setMaximumWidth(80)
+                open_btn.clicked.connect(lambda checked, r=response_text, m=model_name: self.open_markdown_view(m, r))
+                
+                actions_layout.addWidget(open_btn)
+                actions_layout.addStretch()
+                
+                actions_widget.setLayout(actions_layout)
+                self.results_table.setCellWidget(row, 3, actions_widget)
+                
+                # Resize row to fit content
+                self.results_table.resizeRowToContents(row)
             
             self.status_bar.showMessage(f"Загружено {len(saved_results)} сохраненных результат(ов)")
         except Exception as e:
             logger.error(f"Error loading saved results: {e}")
             QMessageBox.critical(self, "Ошибка", f"Ошибка загрузки сохраненных результатов: {str(e)}")
+    
+    def open_markdown_view(self, model_name: str, response_text: str):
+        """
+        Open markdown view dialog for a response.
+        
+        Args:
+            model_name [in]: Name of the model
+            response_text [in]: Response text to display
+        """
+        dialog = MarkdownViewDialog(
+            f"Ответ от {model_name}",
+            response_text,
+            self
+        )
+        dialog.exec_()
     
     def new_query(self):
         """

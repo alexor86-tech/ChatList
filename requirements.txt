@@ -2,4 +2,5 @@ PyQt5>=5.15.0
 requests>=2.31.0
 httpx>=0.25.0
 python-dotenv>=1.0.0
+markdown>=3.4.0
 
