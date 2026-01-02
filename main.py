@@ -559,6 +559,92 @@ class MarkdownViewDialog(QDialog):
         self.setLayout(layout)
 
 
+class PromptDialog(QDialog):
+    """
+    Dialog for creating/editing prompts.
+    """
+    
+    def __init__(self, parent=None, prompt_id: Optional[int] = None):
+        """
+        Initialize prompt dialog.
+        
+        @param [in] parent Parent widget
+        @param [in] prompt_id Prompt ID to edit (None for new prompt)
+        """
+        super().__init__(parent)
+        self.prompt_id = prompt_id
+        self.init_ui()
+        
+        if prompt_id:
+            self.load_prompt_data()
+    
+    def init_ui(self):
+        """
+        Initialize dialog UI.
+        """
+        # Local variables
+        layout = QVBoxLayout()
+        
+        form_layout = QFormLayout()
+        
+        self.prompt_text_edit = QTextEdit()
+        self.prompt_text_edit.setMinimumHeight(150)
+        form_layout.addRow("Промт *:", self.prompt_text_edit)
+        
+        self.tags_edit = QLineEdit()
+        self.tags_edit.setPlaceholderText("Теги через запятую (необязательно)")
+        form_layout.addRow("Теги:", self.tags_edit)
+        
+        layout.addLayout(form_layout)
+        
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+        
+        self.setLayout(layout)
+        
+        title = "Редактировать промт" if self.prompt_id else "Создать промт"
+        self.setWindowTitle(title)
+        self.setMinimumWidth(600)
+    
+    def load_prompt_data(self):
+        """
+        Load prompt data for editing.
+        """
+        try:
+            prompt_data = db.get_prompt(self.prompt_id)
+            if prompt_data:
+                self.prompt_text_edit.setPlainText(prompt_data["prompt"])
+                self.tags_edit.setText(prompt_data["tags"] if prompt_data["tags"] else "")
+        except Exception as e:
+            logger.error(f"Error loading prompt data: {e}")
+            QMessageBox.critical(self, "Ошибка", f"Ошибка загрузки данных промта: {str(e)}")
+    
+    def get_prompt_data(self) -> Dict[str, Any]:
+        """
+        Get prompt data from form.
+        
+        @return [out] Dictionary with prompt_text and tags
+        """
+        return {
+            "prompt_text": self.prompt_text_edit.toPlainText().strip(),
+            "tags": self.tags_edit.text().strip() or None
+        }
+    
+    def accept(self):
+        """
+        Validate and accept dialog.
+        """
+        data = self.get_prompt_data()
+        
+        if not data["prompt_text"]:
+            QMessageBox.warning(self, "Предупреждение", "Поле 'Промт' обязательно для заполнения.")
+            return
+        
+        super().accept()
+
+
 class ViewPromptsDialog(QDialog):
     """
     Dialog for viewing saved prompts.
@@ -624,8 +710,14 @@ class ViewPromptsDialog(QDialog):
         # Buttons
         buttons_layout = QHBoxLayout()
         
+        create_button = QPushButton("Создать")
+        create_button.clicked.connect(self.create_prompt)
+        
         load_button = QPushButton("Загрузить выбранный")
         load_button.clicked.connect(self.load_selected_prompt)
+        
+        edit_button = QPushButton("Редактировать выбранный")
+        edit_button.clicked.connect(self.edit_selected_prompt)
         
         delete_button = QPushButton("Удалить выбранный")
         delete_button.clicked.connect(self.delete_selected_prompt)
@@ -639,7 +731,9 @@ class ViewPromptsDialog(QDialog):
         close_button = QPushButton("Закрыть")
         close_button.clicked.connect(self.accept)
         
+        buttons_layout.addWidget(create_button)
         buttons_layout.addWidget(load_button)
+        buttons_layout.addWidget(edit_button)
         buttons_layout.addWidget(delete_button)
         buttons_layout.addWidget(clear_all_button)
         buttons_layout.addWidget(refresh_button)
@@ -714,17 +808,23 @@ class ViewPromptsDialog(QDialog):
             actions_layout = QHBoxLayout()
             actions_layout.setContentsMargins(2, 2, 2, 2)
             
-            load_btn = QPushButton("📥")
-            load_btn.setMaximumWidth(30)
+            load_btn = QPushButton("Загрузить")
+            load_btn.setMaximumWidth(80)
             load_btn.setToolTip("Загрузить промт")
             load_btn.clicked.connect(lambda checked, p_id=prompt["id"]: self.load_prompt(p_id))
             
-            delete_btn = QPushButton("🗑")
-            delete_btn.setMaximumWidth(30)
+            edit_btn = QPushButton("Редактировать")
+            edit_btn.setMaximumWidth(100)
+            edit_btn.setToolTip("Редактировать промт")
+            edit_btn.clicked.connect(lambda checked, p_id=prompt["id"]: self.edit_prompt(p_id))
+            
+            delete_btn = QPushButton("Удалить")
+            delete_btn.setMaximumWidth(80)
             delete_btn.setToolTip("Удалить промт")
             delete_btn.clicked.connect(lambda checked, p_id=prompt["id"]: self.delete_prompt(p_id))
             
             actions_layout.addWidget(load_btn)
+            actions_layout.addWidget(edit_btn)
             actions_layout.addWidget(delete_btn)
             actions_layout.addStretch()
             
@@ -771,6 +871,60 @@ class ViewPromptsDialog(QDialog):
         """
         self.prompt_selected.emit(prompt_id)
         self.accept()
+    
+    def create_prompt(self):
+        """
+        Create a new prompt.
+        """
+        dialog = PromptDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            try:
+                data = dialog.get_prompt_data()
+                prompt_id = db.create_prompt(data["prompt_text"], data["tags"])
+                QMessageBox.information(self, "Успех", "Промт успешно создан")
+                self.load_prompts()
+                # Refresh prompts in main window
+                if hasattr(self.parent(), 'load_saved_prompts'):
+                    self.parent().load_saved_prompts()
+            except Exception as e:
+                logger.error(f"Error creating prompt: {e}")
+                QMessageBox.critical(self, "Ошибка", f"Ошибка создания промта: {str(e)}")
+    
+    def edit_selected_prompt(self):
+        """
+        Edit selected prompt.
+        """
+        # Local variables
+        prompt_id = self.get_selected_prompt_id()
+        
+        if prompt_id is None:
+            QMessageBox.information(self, "Информация", "Пожалуйста, выберите промт для редактирования")
+            return
+        
+        self.edit_prompt(prompt_id)
+    
+    def edit_prompt(self, prompt_id: int):
+        """
+        Edit prompt.
+        
+        @param [in] prompt_id Prompt ID to edit
+        """
+        dialog = PromptDialog(self, prompt_id)
+        if dialog.exec_() == QDialog.Accepted:
+            try:
+                data = dialog.get_prompt_data()
+                success = db.update_prompt(prompt_id, data["prompt_text"], data["tags"])
+                if success:
+                    QMessageBox.information(self, "Успех", "Промт успешно обновлен")
+                    self.load_prompts()
+                    # Refresh prompts in main window
+                    if hasattr(self.parent(), 'load_saved_prompts'):
+                        self.parent().load_saved_prompts()
+                else:
+                    QMessageBox.critical(self, "Ошибка", "Не удалось обновить промт")
+            except Exception as e:
+                logger.error(f"Error updating prompt: {e}")
+                QMessageBox.critical(self, "Ошибка", f"Ошибка обновления промта: {str(e)}")
     
     def delete_selected_prompt(self):
         """
