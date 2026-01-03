@@ -172,7 +172,10 @@ def init_default_settings(cursor: sqlite3.Cursor):
         ("default_timeout", "30"),
         ("max_retries", "3"),
         ("export_format", "markdown"),
-        ("theme", "light")
+        ("theme", "light"),
+        ("default_improvement_model_id", ""),
+        ("improvement_num_variants", "3"),
+        ("default_adaptation_type", "general")
     ]
     
     current_time = datetime.now().isoformat()

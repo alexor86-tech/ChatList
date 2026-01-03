@@ -15,13 +15,15 @@ from PyQt5.QtWidgets import (
     QTextEdit, QPushButton, QTableWidget, QTableWidgetItem, QCheckBox,
     QComboBox, QLabel, QLineEdit, QMessageBox, QFileDialog, QMenuBar,
     QMenu, QStatusBar, QHeaderView, QProgressBar, QDialog, QFormLayout,
-    QDialogButtonBox, QSpinBox, QAbstractItemView
+    QDialogButtonBox, QSpinBox, QAbstractItemView, QRadioButton, QButtonGroup,
+    QGroupBox, QScrollArea
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont
 import db
 import models
 import network
+import prompt_improver
 
 
 # Configure logging
@@ -645,6 +647,267 @@ class PromptDialog(QDialog):
         super().accept()
 
 
+class PromptImprovementDialog(QDialog):
+    """
+    Dialog for improving prompts using AI.
+    """
+    
+    def __init__(self, parent=None, original_prompt: str = "", 
+                 improver: Optional[prompt_improver.PromptImprover] = None):
+        """
+        Initialize prompt improvement dialog.
+        
+        Args:
+            parent [in]: Parent widget
+            original_prompt [in]: Original prompt text
+            improver [in]: PromptImprover instance
+        """
+        super().__init__(parent)
+        self.original_prompt = original_prompt
+        self.improver = improver
+        self.selected_prompt = None
+        self.init_ui()
+    
+    def init_ui(self):
+        """
+        Initialize dialog UI.
+        """
+        # Local variables
+        layout = QVBoxLayout()
+        
+        # Title
+        title_label = QLabel("Улучшение промта")
+        title_font = QFont()
+        title_font.setBold(True)
+        title_font.setPointSize(12)
+        title_label.setFont(title_font)
+        layout.addWidget(title_label)
+        
+        # Original prompt section
+        original_group = QGroupBox("Исходный промт")
+        original_layout = QVBoxLayout()
+        self.original_text = QTextEdit()
+        self.original_text.setPlainText(self.original_prompt)
+        self.original_text.setReadOnly(True)
+        self.original_text.setMaximumHeight(100)
+        original_layout.addWidget(self.original_text)
+        original_group.setLayout(original_layout)
+        layout.addWidget(original_group)
+        
+        # Model selection
+        model_layout = QHBoxLayout()
+        model_label = QLabel("Модель для улучшения:")
+        self.model_combo = QComboBox()
+        self.model_combo.setEditable(False)
+        # Load active models
+        try:
+            active_models = models.get_active_models()
+            for model in active_models:
+                self.model_combo.addItem(model.name, model)
+        except Exception as e:
+            logger.error(f"Error loading models: {e}")
+        
+        model_layout.addWidget(model_label)
+        model_layout.addWidget(self.model_combo)
+        layout.addLayout(model_layout)
+        
+        # Adaptation type
+        adaptation_layout = QHBoxLayout()
+        adaptation_label = QLabel("Тип адаптации:")
+        self.adaptation_combo = QComboBox()
+        self.adaptation_combo.addItem("Общее улучшение", "general")
+        self.adaptation_combo.addItem("Для кода", "code")
+        self.adaptation_combo.addItem("Для анализа", "analysis")
+        self.adaptation_combo.addItem("Для творчества", "creative")
+        adaptation_layout.addWidget(adaptation_label)
+        adaptation_layout.addWidget(self.adaptation_combo)
+        layout.addLayout(adaptation_layout)
+        
+        # Progress indicator
+        self.progress_label = QLabel("")
+        self.progress_label.setVisible(False)
+        layout.addWidget(self.progress_label)
+        
+        # Results section
+        results_group = QGroupBox("Результаты")
+        results_layout = QVBoxLayout()
+        
+        # Improved version
+        improved_label = QLabel("Улучшенная версия:")
+        self.improved_text = QTextEdit()
+        self.improved_text.setReadOnly(True)
+        self.improved_text.setMaximumHeight(100)
+        results_layout.addWidget(improved_label)
+        results_layout.addWidget(self.improved_text)
+        
+        # Variants
+        variants_label = QLabel("Альтернативные варианты:")
+        results_layout.addWidget(variants_label)
+        
+        # Radio buttons for variants
+        self.variants_group = QButtonGroup()
+        self.variants_layout = QVBoxLayout()
+        self.variant_radios = []
+        
+        # Create placeholder radio buttons (will be populated after improvement)
+        for i in range(3):
+            radio = QRadioButton()
+            radio.setVisible(False)
+            self.variant_radios.append(radio)
+            self.variants_group.addButton(radio, i)
+            self.variants_layout.addWidget(radio)
+        
+        results_layout.addLayout(self.variants_layout)
+        results_group.setLayout(results_layout)
+        layout.addWidget(results_group)
+        
+        # Buttons
+        buttons_layout = QHBoxLayout()
+        
+        improve_button = QPushButton("Улучшить")
+        improve_button.clicked.connect(self.improve_prompt)
+        
+        insert_button = QPushButton("Подставить в поле ввода")
+        insert_button.clicked.connect(self.accept)
+        
+        cancel_button = QPushButton("Отмена")
+        cancel_button.clicked.connect(self.reject)
+        
+        buttons_layout.addWidget(improve_button)
+        buttons_layout.addWidget(insert_button)
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(cancel_button)
+        
+        layout.addLayout(buttons_layout)
+        self.setLayout(layout)
+        
+        # Setup window
+        self.setWindowTitle("Улучшение промта")
+        self.setMinimumSize(700, 600)
+    
+    def improve_prompt(self):
+        """
+        Improve prompt using AI.
+        """
+        # Local variables
+        current_model_data = self.model_combo.currentData()
+        
+        if not current_model_data:
+            QMessageBox.warning(self, "Предупреждение", "Пожалуйста, выберите модель для улучшения")
+            return
+        
+        if not self.original_prompt.strip():
+            QMessageBox.warning(self, "Предупреждение", "Исходный промт пуст")
+            return
+        
+        # Show progress
+        self.progress_label.setText("Улучшение промта...")
+        self.progress_label.setVisible(True)
+        self.setEnabled(False)
+        
+        try:
+            # Get adaptation type
+            adaptation_type = self.adaptation_combo.currentData()
+            
+            # Get number of variants from parent settings if available
+            num_variants = 3  # Default
+            if self.parent() and hasattr(self.parent(), 'improvement_num_variants'):
+                num_variants = self.parent().improvement_num_variants
+            
+            # Improve prompt with variants
+            result = self.improver.improve_with_variants(
+                self.original_prompt, current_model_data, adaptation_type
+            )
+            
+            # Limit variants to configured number
+            if "variants" in result:
+                result["variants"] = result["variants"][:num_variants]
+            
+            # Display improved version
+            improved_text = result.get("improved", "")
+            if improved_text:
+                self.improved_text.setPlainText(improved_text)
+                # Set improved as default selection
+                self.selected_prompt = improved_text
+            else:
+                self.improved_text.setPlainText("Не удалось получить улучшенную версию")
+            
+            # Display variants
+            variants = result.get("variants", [])
+            for i, radio in enumerate(self.variant_radios):
+                if i < len(variants):
+                    # Truncate for display
+                    display_text = variants[i]
+                    if len(display_text) > 60:
+                        display_text = display_text[:60] + "..."
+                    radio.setText(f"Вариант {i + 1}: {display_text}")
+                    radio.setVisible(True)
+                    # Store full variant text
+                    radio.setProperty("variant_text", variants[i])
+                    # Connect signal to update selection
+                    radio.toggled.connect(self.on_variant_selected)
+                else:
+                    radio.setVisible(False)
+            
+            # If no improved version but have variants, select first variant
+            if not improved_text and variants:
+                self.variant_radios[0].setChecked(True)
+                self.selected_prompt = variants[0]
+            
+            self.progress_label.setText("Готово")
+            
+        except Exception as e:
+            logger.error(f"Error improving prompt: {e}")
+            error_msg = str(e) if str(e) else type(e).__name__
+            QMessageBox.critical(
+                self, "Ошибка",
+                f"Ошибка при улучшении промта: {error_msg}"
+            )
+            self.progress_label.setVisible(False)
+        finally:
+            self.setEnabled(True)
+            # Hide progress after a delay
+            QTimer.singleShot(2000, lambda: self.progress_label.setVisible(False))
+    
+    def on_variant_selected(self, checked: bool):
+        """
+        Handle variant selection.
+        
+        Args:
+            checked [in]: Whether radio button is checked
+        """
+        if checked:
+            # Find which radio was checked
+            for radio in self.variant_radios:
+                if radio.isChecked():
+                    variant_text = radio.property("variant_text")
+                    if variant_text:
+                        self.selected_prompt = variant_text
+                    break
+    
+    def get_selected_prompt(self) -> Optional[str]:
+        """
+        Get selected prompt variant.
+        
+        Returns:
+            Optional[str]: Selected prompt text or None
+        """
+        # Check if any variant is selected via radio button
+        for radio in self.variant_radios:
+            if radio.isVisible() and radio.isChecked():
+                variant_text = radio.property("variant_text")
+                if variant_text:
+                    return variant_text
+        
+        # If no variant selected, return improved version
+        improved = self.improved_text.toPlainText().strip()
+        if improved and improved != "Не удалось получить улучшенную версию":
+            return improved
+        
+        # Fallback to original
+        return self.original_prompt if self.original_prompt.strip() else None
+
+
 class ViewPromptsDialog(QDialog):
     """
     Dialog for viewing saved prompts.
@@ -1036,6 +1299,7 @@ class MainWindow(QMainWindow):
         self.current_prompt_id = None
         self.temp_results = []  # Temporary results in memory
         self.request_worker = None
+        self.prompt_improver = prompt_improver.PromptImprover()
         
         self.init_ui()
         self.load_saved_prompts()
@@ -1163,12 +1427,15 @@ class MainWindow(QMainWindow):
         bottom_row.addWidget(self.tags_input)
         
         # Buttons
+        improve_button = QPushButton("Улучшить промт")
+        improve_button.clicked.connect(self.show_improve_prompt_dialog)
         load_button = QPushButton("Загрузить промт")
         load_button.clicked.connect(self.load_selected_prompt)
         self.send_button = QPushButton("Отправить")
         self.send_button.clicked.connect(self.send_prompt)
         self.send_button.setDefault(True)
         
+        bottom_row.addWidget(improve_button)
         bottom_row.addWidget(load_button)
         bottom_row.addWidget(self.send_button)
         
@@ -1282,10 +1549,18 @@ class MainWindow(QMainWindow):
             settings = db.get_all_settings()
             self.timeout = int(settings.get("default_timeout", "30"))
             self.max_retries = int(settings.get("max_retries", "3"))
+            
+            # Load prompt improvement settings
+            self.default_improvement_model_id = settings.get("default_improvement_model_id")
+            self.improvement_num_variants = int(settings.get("improvement_num_variants", "3"))
+            self.default_adaptation_type = settings.get("default_adaptation_type", "general")
         except Exception as e:
             logger.error(f"Error loading settings: {e}")
             self.timeout = 30
             self.max_retries = 3
+            self.default_improvement_model_id = None
+            self.improvement_num_variants = 3
+            self.default_adaptation_type = "general"
     
     
     def load_selected_prompt(self):
@@ -1847,6 +2122,89 @@ class MainWindow(QMainWindow):
             self, "Информация",
             "Диалог настроек будет реализован в будущей версии"
         )
+    
+    def show_improve_prompt_dialog(self):
+        """
+        Show prompt improvement dialog.
+        """
+        # Local variables
+        prompt_text = self.prompt_text.toPlainText().strip()
+        
+        if not prompt_text:
+            reply = QMessageBox.question(
+                self, "Пустой промт",
+                "Поле ввода промта пустое. Хотите использовать сохраненный промт?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                # Try to load from saved prompts
+                current_data = self.saved_prompts_combo.currentData()
+                if current_data:
+                    try:
+                        prompt_data = db.get_prompt(current_data)
+                        if prompt_data:
+                            prompt_text = prompt_data["prompt"]
+                        else:
+                            QMessageBox.information(
+                                self, "Информация",
+                                "Пожалуйста, введите промт или выберите сохраненный"
+                            )
+                            return
+                    except Exception as e:
+                        logger.error(f"Error loading prompt: {e}")
+                        QMessageBox.critical(
+                            self, "Ошибка",
+                            f"Ошибка загрузки промта: {str(e)}"
+                        )
+                        return
+                else:
+                    QMessageBox.information(
+                        self, "Информация",
+                        "Пожалуйста, введите промт или выберите сохраненный"
+                    )
+                    return
+            else:
+                return
+        
+        # Check if there are active models
+        active_models = models.get_active_models()
+        if not active_models:
+            QMessageBox.warning(
+                self, "Предупреждение",
+                "Нет активных моделей. Пожалуйста, добавьте модели в меню Модели."
+            )
+            return
+        
+        # Show improvement dialog
+        dialog = PromptImprovementDialog(self, prompt_text, self.prompt_improver)
+        
+        # Set default model if configured
+        if hasattr(self, 'default_improvement_model_id') and self.default_improvement_model_id:
+            try:
+                model_id = int(self.default_improvement_model_id)
+                # Find model in combo and select it
+                for i in range(dialog.model_combo.count()):
+                    model = dialog.model_combo.itemData(i)
+                    if model and model.id == model_id:
+                        dialog.model_combo.setCurrentIndex(i)
+                        break
+            except (ValueError, TypeError):
+                pass
+        
+        # Set default adaptation type if configured
+        if hasattr(self, 'default_adaptation_type') and self.default_adaptation_type:
+            for i in range(dialog.adaptation_combo.count()):
+                if dialog.adaptation_combo.itemData(i) == self.default_adaptation_type:
+                    dialog.adaptation_combo.setCurrentIndex(i)
+                    break
+        
+        if dialog.exec_() == QDialog.Accepted:
+            selected_prompt = dialog.get_selected_prompt()
+            if selected_prompt:
+                # Insert selected prompt into input field
+                self.prompt_text.setPlainText(selected_prompt)
+                self.status_bar.showMessage("Улучшенный промт подставлен в поле ввода")
     
     def show_about(self):
         """
