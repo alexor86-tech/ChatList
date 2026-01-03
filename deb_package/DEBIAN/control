@@ -1,0 +1,20 @@
+Package: chatlist
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: libc6 (>= 2.31), libqt5core5a (>= 5.15.0), libqt5gui5 (>= 5.15.0), libqt5widgets5 (>= 5.15.0)
+Maintainer: alexor86-test <alexor86-test@example.com>
+Description: AI Model Comparison Tool
+ ChatList — это Python-приложение с графическим интерфейсом (PyQt5),
+ которое позволяет отправлять один промт в несколько AI-моделей
+ одновременно и сравнивать их ответы.
+ .
+ Основные возможности:
+  - Отправка промтов в несколько AI моделей одновременно
+  - Сравнение ответов в удобной таблице
+  - Сохранение промтов и результатов
+  - AI-ассистент для улучшения промтов
+  - Экспорт результатов в Markdown и JSON
+  - Настройка темы и размера шрифта
+

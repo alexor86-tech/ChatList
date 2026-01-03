@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ChatList
+Name[ru]=ChatList
+Comment=AI Model Comparison Tool
+Comment[ru]=Инструмент сравнения AI моделей
+Exec=/usr/bin/chatlist
+Icon=chatlist
+Terminal=false
+Categories=Utility;Development;
+StartupNotify=true
+

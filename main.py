@@ -25,6 +25,7 @@ import db
 import models
 import network
 import prompt_improver
+import version
 
 
 # Configure logging
@@ -1457,7 +1458,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         
         # Setup window
-        self.setWindowTitle("ChatList - Сравнение AI моделей")
+        self.setWindowTitle(f"ChatList v{version.__version__} - Сравнение AI моделей")
         self.setGeometry(100, 100, 1200, 800)
         
         # Set window icon
@@ -2165,7 +2166,7 @@ class MainWindow(QMainWindow):
             results [in]: List of results to export
         """
         with open(file_path, "w", encoding="utf-8") as f:
-            f.write("# Экспорт ChatList\n\n")
+            f.write(f"# Экспорт ChatList v{version.__version__}\n\n")
             f.write(f"**Дата экспорта:** {datetime.now().isoformat()}\n\n")
             
             if self.current_prompt_id:
@@ -2195,6 +2196,7 @@ class MainWindow(QMainWindow):
         """
         # Local variables
         export_data = {
+            "version": version.__version__,
             "export_date": datetime.now().isoformat(),
             "prompt_id": self.current_prompt_id,
             "results": results
@@ -2425,7 +2427,7 @@ class MainWindow(QMainWindow):
         about_text = (
             "<h2>ChatList</h2>"
             "<p><b>Инструмент сравнения AI моделей</b></p>"
-            "<p>Версия 1.0</p>"
+            f"<p>Версия {version.__version__}</p>"
             "<hr>"
             "<p>ChatList позволяет отправлять один и тот же промт "
             "в несколько нейросетей и сравнивать их ответы.</p>"
@@ -2458,6 +2460,7 @@ def main():
     Main entry point of the application.
     """
     # Local variables
+    logger.info(f"Starting ChatList v{version.__version__}")
     app = QApplication(sys.argv)
     window = MainWindow()
     

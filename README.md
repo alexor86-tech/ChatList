@@ -121,18 +121,58 @@ ChatList/
 
 Для создания standalone исполняемого файла:
 
-1. Установите PyInstaller (если не установлен):
+1. Убедитесь, что PyInstaller установлен:
 ```bash
 source venv/bin/activate
 pip install pyinstaller
 ```
 
-2. Соберите исполняемый файл:
+2. Соберите исполняемый файл используя spec файл:
+```bash
+pyinstaller ChatList.spec
+```
+
+Исполняемый файл будет создан в директории `dist/` с именем `ChatList-{version}`, где `{version}` - версия из файла `version.py` (например, `ChatList-1.0.0`).
+
+**Альтернативный способ** (без spec файла):
 ```bash
 pyinstaller --onefile --windowed --name ChatList main.py
 ```
 
-Исполняемый файл будет создан в директории `dist/` как `ChatList`.
+## Сборка .deb пакета
+
+Для создания .deb пакета для установки в Debian/Ubuntu:
+
+1. Сначала соберите исполняемый файл (см. раздел выше)
+
+2. Запустите скрипт сборки:
+```bash
+./build_deb.sh
+```
+
+Или вручную:
+```bash
+# Создайте структуру пакета
+mkdir -p deb_package/DEBIAN deb_package/usr/bin deb_package/usr/share/applications
+
+# Скопируйте исполняемый файл
+cp dist/ChatList-1.0.0 deb_package/usr/bin/chatlist
+chmod +x deb_package/usr/bin/chatlist
+
+# Создайте файлы control, desktop и т.д. (см. deb_package/)
+# Затем соберите пакет:
+dpkg-deb --build deb_package chatlist_1.0.0_amd64.deb
+```
+
+3. Установите пакет:
+```bash
+sudo dpkg -i chatlist_1.0.0_amd64.deb
+```
+
+Если возникнут проблемы с зависимостями:
+```bash
+sudo apt-get install -f
+```
 
 ## Требования
 
