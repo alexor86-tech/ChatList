@@ -182,6 +182,19 @@ sudo apt-get install -f
 - requests или httpx
 - python-dotenv
 
+## Публикация релизов
+
+Для публикации новой версии на GitHub Release и GitHub Pages:
+
+1. **Быстрый старт**: См. [QUICK_RELEASE_GUIDE.md](QUICK_RELEASE_GUIDE.md)
+2. **Подробная инструкция**: См. [GITHUB_RELEASE_GUIDE.md](GITHUB_RELEASE_GUIDE.md)
+
+### Автоматизация
+
+Проект включает GitHub Actions workflows для автоматической сборки и публикации:
+- `.github/workflows/release.yml` - автоматическая сборка при создании тега
+- `.github/workflows/pages.yml` - автоматический деплой GitHub Pages
+
 ## Лицензия
 
 См. файл LICENSE.
@@ -192,3 +205,9 @@ sudo apt-get install -f
 1. Правильность API-ключей в `.env`
 2. Наличие активных моделей в базе данных
 3. Логи в консоли для диагностики ошибок
+
+## Ссылки
+
+- 📄 [Документация](https://github.com/YOUR_USERNAME/ChatList#readme)
+- 🌐 [Страница проекта](https://YOUR_USERNAME.github.io/ChatList/)
+- 📦 [Релизы](https://github.com/YOUR_USERNAME/ChatList/releases)

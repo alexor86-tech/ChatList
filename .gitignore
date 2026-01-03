@@ -1,13 +1,49 @@
-venv/
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
+*.py[cod]
+*$py.class
 *.so
-*.egg
-*.egg-info/
-dist/
-build/
-*.spec
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment
 .env
+.env.local
+
+# Build
+build/
+dist/
+*.spec.bak
+*.egg-info/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Release files
+release_v*/
+deb_package/
+*.deb
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
