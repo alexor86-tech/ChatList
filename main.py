@@ -5,6 +5,7 @@ GUI application for comparing AI model responses.
 """
 
 import sys
+import os
 import json
 import logging
 from typing import List, Dict, Optional, Any
@@ -19,7 +20,7 @@ from PyQt5.QtWidgets import (
     QGroupBox, QScrollArea
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QIcon
 import db
 import models
 import network
@@ -1351,6 +1352,11 @@ class MainWindow(QMainWindow):
         # Setup window
         self.setWindowTitle("ChatList - Сравнение AI моделей")
         self.setGeometry(100, 100, 1200, 800)
+        
+        # Set window icon
+        icon_path = "app.ico"
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
     
     def create_menu_bar(self):
         """
