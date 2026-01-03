@@ -173,6 +173,7 @@ def init_default_settings(cursor: sqlite3.Cursor):
         ("max_retries", "3"),
         ("export_format", "markdown"),
         ("theme", "light"),
+        ("font_size", "12"),
         ("default_improvement_model_id", ""),
         ("improvement_num_variants", "3"),
         ("default_adaptation_type", "general")

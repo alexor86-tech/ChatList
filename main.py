@@ -17,10 +17,10 @@ from PyQt5.QtWidgets import (
     QComboBox, QLabel, QLineEdit, QMessageBox, QFileDialog, QMenuBar,
     QMenu, QStatusBar, QHeaderView, QProgressBar, QDialog, QFormLayout,
     QDialogButtonBox, QSpinBox, QAbstractItemView, QRadioButton, QButtonGroup,
-    QGroupBox, QScrollArea
+    QGroupBox, QScrollArea, QSlider
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt5.QtGui import QFont, QIcon
+from PyQt5.QtGui import QFont, QIcon, QPalette
 import db
 import models
 import network
@@ -646,6 +646,112 @@ class PromptDialog(QDialog):
             return
         
         super().accept()
+
+
+class SettingsDialog(QDialog):
+    """
+    Dialog for application settings.
+    """
+    
+    def __init__(self, parent=None):
+        """
+        Initialize settings dialog.
+        
+        Args:
+            parent [in]: Parent widget
+        """
+        super().__init__(parent)
+        self.init_ui()
+        self.load_settings()
+    
+    def init_ui(self):
+        """
+        Initialize dialog UI.
+        """
+        # Local variables
+        layout = QVBoxLayout()
+        
+        # Title
+        title_label = QLabel("Настройки")
+        title_font = QFont()
+        title_font.setBold(True)
+        title_font.setPointSize(12)
+        title_label.setFont(title_font)
+        layout.addWidget(title_label)
+        
+        form_layout = QFormLayout()
+        
+        # Theme selection
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItem("Светлая", "light")
+        self.theme_combo.addItem("Темная", "dark")
+        form_layout.addRow("Тема:", self.theme_combo)
+        
+        # Font size selection
+        font_size_layout = QHBoxLayout()
+        self.font_size_slider = QSlider(Qt.Horizontal)
+        self.font_size_slider.setMinimum(8)
+        self.font_size_slider.setMaximum(24)
+        self.font_size_slider.setValue(12)
+        self.font_size_slider.setTickPosition(QSlider.TicksBelow)
+        self.font_size_slider.setTickInterval(2)
+        self.font_size_label = QLabel("12")
+        self.font_size_label.setMinimumWidth(30)
+        self.font_size_slider.valueChanged.connect(
+            lambda v: self.font_size_label.setText(str(v))
+        )
+        font_size_layout.addWidget(self.font_size_slider)
+        font_size_layout.addWidget(self.font_size_label)
+        font_size_widget = QWidget()
+        font_size_widget.setLayout(font_size_layout)
+        form_layout.addRow("Размер шрифта:", font_size_widget)
+        
+        layout.addLayout(form_layout)
+        
+        # Buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        
+        self.setLayout(layout)
+        self.setWindowTitle("Настройки")
+        self.setMinimumWidth(400)
+    
+    def load_settings(self):
+        """
+        Load current settings.
+        """
+        try:
+            # Local variables
+            theme = db.get_setting("theme") or "light"
+            font_size = int(db.get_setting("font_size") or "12")
+            
+            # Set theme
+            for i in range(self.theme_combo.count()):
+                if self.theme_combo.itemData(i) == theme:
+                    self.theme_combo.setCurrentIndex(i)
+                    break
+            
+            # Set font size
+            self.font_size_slider.setValue(font_size)
+            self.font_size_label.setText(str(font_size))
+        except Exception as e:
+            logger.error(f"Error loading settings: {e}")
+    
+    def get_settings(self) -> Dict[str, Any]:
+        """
+        Get settings from dialog.
+        
+        Returns:
+            Dict[str, Any]: Settings dictionary
+        """
+        return {
+            "theme": self.theme_combo.currentData(),
+            "font_size": self.font_size_slider.value()
+        }
 
 
 class PromptImprovementDialog(QDialog):
@@ -1302,9 +1408,10 @@ class MainWindow(QMainWindow):
         self.request_worker = None
         self.prompt_improver = prompt_improver.PromptImprover()
         
+        self.load_settings()
         self.init_ui()
         self.load_saved_prompts()
-        self.load_settings()
+        self.apply_settings()
     
     def init_ui(self):
         """
@@ -1357,6 +1464,9 @@ class MainWindow(QMainWindow):
         icon_path = "app.ico"
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
+        
+        # Apply settings after UI is initialized
+        # Note: apply_settings is called in __init__ after init_ui
     
     def create_menu_bar(self):
         """
@@ -1560,6 +1670,10 @@ class MainWindow(QMainWindow):
             self.default_improvement_model_id = settings.get("default_improvement_model_id")
             self.improvement_num_variants = int(settings.get("improvement_num_variants", "3"))
             self.default_adaptation_type = settings.get("default_adaptation_type", "general")
+            
+            # Load UI settings
+            self.theme = settings.get("theme", "light")
+            self.font_size = int(settings.get("font_size", "12"))
         except Exception as e:
             logger.error(f"Error loading settings: {e}")
             self.timeout = 30
@@ -1567,6 +1681,75 @@ class MainWindow(QMainWindow):
             self.default_improvement_model_id = None
             self.improvement_num_variants = 3
             self.default_adaptation_type = "general"
+            self.theme = "light"
+            self.font_size = 12
+    
+    def apply_settings(self):
+        """
+        Apply UI settings (theme and font size).
+        """
+        try:
+            # Apply theme
+            if self.theme == "dark":
+                self.apply_dark_theme()
+            else:
+                self.apply_light_theme()
+            
+            # Apply font size
+            self.apply_font_size(self.font_size)
+        except Exception as e:
+            logger.error(f"Error applying settings: {e}")
+    
+    def apply_dark_theme(self):
+        """
+        Apply dark theme to application.
+        """
+        # Local variables
+        app = QApplication.instance()
+        palette = QPalette()
+        
+        # Dark color scheme
+        palette.setColor(QPalette.Window, Qt.darkGray)
+        palette.setColor(QPalette.WindowText, Qt.white)
+        palette.setColor(QPalette.Base, Qt.black)
+        palette.setColor(QPalette.AlternateBase, Qt.darkGray)
+        palette.setColor(QPalette.ToolTipBase, Qt.white)
+        palette.setColor(QPalette.ToolTipText, Qt.white)
+        palette.setColor(QPalette.Text, Qt.white)
+        palette.setColor(QPalette.Button, Qt.darkGray)
+        palette.setColor(QPalette.ButtonText, Qt.white)
+        palette.setColor(QPalette.BrightText, Qt.red)
+        palette.setColor(QPalette.Link, Qt.cyan)
+        palette.setColor(QPalette.Highlight, Qt.blue)
+        palette.setColor(QPalette.HighlightedText, Qt.white)
+        
+        app.setPalette(palette)
+    
+    def apply_light_theme(self):
+        """
+        Apply light theme to application.
+        """
+        # Local variables
+        app = QApplication.instance()
+        app.setPalette(app.style().standardPalette())
+    
+    def apply_font_size(self, size: int):
+        """
+        Apply font size to application panels.
+        
+        Args:
+            size [in]: Font size in points
+        """
+        # Local variables
+        font = QFont()
+        font.setPointSize(size)
+        
+        # Apply to main widgets
+        self.prompt_text.setFont(font)
+        self.results_table.setFont(font)
+        
+        # Apply to status bar
+        self.status_bar.setFont(font)
     
     
     def load_selected_prompt(self):
@@ -2124,10 +2307,33 @@ class MainWindow(QMainWindow):
         """
         Show settings dialog.
         """
-        QMessageBox.information(
-            self, "Информация",
-            "Диалог настроек будет реализован в будущей версии"
-        )
+        dialog = SettingsDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            try:
+                # Local variables
+                settings = dialog.get_settings()
+                
+                # Save settings to database
+                db.set_setting("theme", settings["theme"])
+                db.set_setting("font_size", str(settings["font_size"]))
+                
+                # Update local settings
+                self.theme = settings["theme"]
+                self.font_size = settings["font_size"]
+                
+                # Apply settings immediately
+                self.apply_settings()
+                
+                QMessageBox.information(
+                    self, "Успех",
+                    "Настройки сохранены и применены"
+                )
+            except Exception as e:
+                logger.error(f"Error saving settings: {e}")
+                QMessageBox.critical(
+                    self, "Ошибка",
+                    f"Ошибка сохранения настроек: {str(e)}"
+                )
     
     def show_improve_prompt_dialog(self):
         """
@@ -2216,11 +2422,34 @@ class MainWindow(QMainWindow):
         """
         Show about dialog.
         """
+        about_text = (
+            "<h2>ChatList</h2>"
+            "<p><b>Инструмент сравнения AI моделей</b></p>"
+            "<p>Версия 1.0</p>"
+            "<hr>"
+            "<p>ChatList позволяет отправлять один и тот же промт "
+            "в несколько нейросетей и сравнивать их ответы.</p>"
+            "<p><b>Основные возможности:</b></p>"
+            "<ul>"
+            "<li>Отправка промтов в несколько AI моделей одновременно</li>"
+            "<li>Сравнение ответов в удобной таблице</li>"
+            "<li>Сохранение промтов и результатов</li>"
+            "<li>AI-ассистент для улучшения промтов</li>"
+            "<li>Экспорт результатов в Markdown и JSON</li>"
+            "<li>Настройка темы и размера шрифта</li>"
+            "</ul>"
+            "<p><b>Технологии:</b></p>"
+            "<ul>"
+            "<li>Python 3.11+</li>"
+            "<li>PyQt5</li>"
+            "<li>SQLite</li>"
+            "</ul>"
+            "<p>© 2024 ChatList</p>"
+        )
+        
         QMessageBox.about(
             self, "О программе ChatList",
-            "ChatList - Инструмент сравнения AI моделей\n\n"
-            "Сравнивайте ответы от нескольких AI моделей.\n"
-            "Версия 1.0"
+            about_text
         )
 
 
